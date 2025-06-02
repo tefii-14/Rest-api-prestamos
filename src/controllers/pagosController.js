@@ -30,12 +30,11 @@ export const getCronogramaPagos = async (req, res) => {
       // Obtener pagos asociados a los contratos del beneficiario
       for (const contrato of contratos) {
         const idContrato = contrato.idcontrato;
-        // Ajustar fechainicio para manejar formatos con zona horaria
-        const fechaInicio = new Date(contrato.fechainicio.replace('T', ' ').split('.')[0]);
+        const fechaInicio = new Date(contrato.fechainicio);
         const diaPago = contrato.diapago;
 
         const queryPagos = `
-          SELECT idcontrato, numcuota, monto, penalidad, medio 
+          SELECT idpago, idcontrato, numcuota, fechapago, monto, penalidad, medio 
           FROM pagos 
           WHERE idcontrato = ?
           ORDER BY numcuota
@@ -43,15 +42,20 @@ export const getCronogramaPagos = async (req, res) => {
         const [pagos] = await pool.query(queryPagos, [idContrato]);
 
         pagos.forEach(pago => {
-          // Calcular siempre la fecha programada según diapago
-          let fechaProgramada = new Date(fechaInicio);
-          fechaProgramada.setMonth(fechaProgramada.getMonth() + (pago.numcuota - 1)); // Incrementar meses
-          fechaProgramada.setDate(diaPago); // Ajustar al día de pago
+          let fechaProgramada = null;
+          // Si fechapago es NULL, calcular la fecha según diapago
+          if (!pago.fechapago) {
+            fechaProgramada = new Date(fechaInicio);
+            fechaProgramada.setMonth(fechaProgramada.getMonth() + (pago.numcuota - 1)); // Incrementar meses
+            fechaProgramada.setDate(diaPago); // Ajustar al día de pago
+            fechaProgramada = fechaProgramada.toISOString().split('T')[0];
+          }
 
           cronogramaBeneficiario.push({
+            idpago: pago.idpago,
             idcontrato: pago.idcontrato,
             numcuota: pago.numcuota,
-            fechapago: fechaProgramada.toISOString().split('T')[0], // Siempre la fecha programada
+            fechapago: pago.fechapago ? pago.fechapago.toISOString().split('T')[0] : fechaProgramada, // Usar fecha real o programada
             monto: pago.monto.toFixed(2),
             penalidad: pago.penalidad.toFixed(2),
             medio: pago.medio
